@@ -1,5 +1,9 @@
 # Node dependencies and generated files
 **/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/*.tsbuildinfo
 npm-debug.log*
 
 # Local secrets and environment configuration

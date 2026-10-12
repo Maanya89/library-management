@@ -1,33 +1,78 @@
 # Shelfwise Library Management
 
-Shelfwise is a library-management project with a responsive, browser-based desk for tracking books, members, and loans. The frontend is a standalone HTML, CSS, and JavaScript demo; the repository also includes an experimental Node.js/MySQL backend and SQL scripts.
+Shelfwise is a secure, full-stack library desk for cataloguing books, managing members, issuing and returning loans, and reviewing circulation reports. This repository upgrades the original Shelfwise project in place: Next.js App Router, a typed Express API, PostgreSQL persistence, shared TypeScript contracts, and Docker Compose now replace the browser-only storage and experimental MySQL backend.
 
-## Browser demo
+## Architecture
 
-The frontend works without installing dependencies or running a server:
+```text
+.
+├── apps/
+│   ├── web/                         # Next.js App Router frontend and same-origin API proxy
+│   │   ├── src/app/                 # Overview, catalog, members, circulation, reports, metadata
+│   │   ├── src/components/          # Typed UI, auth/session provider
+│   │   ├── src/lib/api.ts           # Central fetch client; credentials and CSRF header
+│   │   ├── src/proxy.ts             # Per-request CSP nonce
+│   │   ├── Dockerfile
+│   │   └── next.config.ts
+│   └── api/                         # TypeScript Express API
+│       ├── src/routes/              # Auth, books, members, loans, stats
+│       ├── src/migrations/          # PostgreSQL schema migration
+│       ├── src/db.ts                # Bounded PostgreSQL pool and TLS
+│       ├── src/auth.ts              # Opaque server-side sessions and CSRF
+│       └── Dockerfile
+├── packages/
+│   └── contracts/                   # Shared Zod schemas and API/domain types
+├── docker-compose.yml               # PostgreSQL, Redis, API, frontend
+├── package.json                     # npm workspaces and unified scripts
+└── tsconfig.base.json
+```
 
-1. Open `index.html` in a browser, or open the project in VS Code and use Live Server.
-2. Use the sidebar to open Overview, Books, Members, Circulation, or Reports.
-3. Add books and members, record checkouts and returns, and export a CSV report.
+## Run with Docker Compose
 
-The browser demo starts with an empty collection and saves data in that browser's `localStorage`. Data is not shared between browsers or devices, and clearing browser site data removes it. Do not store sensitive member information in the demo.
+1. Copy `.env.example` to `.env` and replace every placeholder with a distinct, randomly generated 64-character hexadecimal secret. Never commit `.env`.
+2. Start the application with `docker compose up --build -d`.
+3. Provision the first administrator from an interactive terminal:
 
-## Project contents
+   ```powershell
+   docker compose exec api node apps/api/dist/create-staff.js
+   ```
 
-- `index.html`, `books.html`, `members.html`, `circulation.html`, and `reports.html` are the browser app's pages.
-- `styles.css` and `app.js` contain shared styling and browser-side interactions.
-- `login.html` and `login.js` are a separate login-page experiment that calls a local API.
-- `library-backend/` contains an experimental Express/MySQL API. Its authentication and database integration are incomplete and must not be used with real accounts or data.
-- `backend/` contains an unfinished package manifest with placeholder dependency versions; it is not currently installable.
-- `database/` contains MySQL schema and sample/experimental SQL scripts. Review scripts before running them against a database.
+4. Open <http://localhost:3000> and sign in with that account.
 
-The browser demo operates independently of both backend folders. The backend folders are included for development reference, not as a production-ready service.
+The frontend is the only service published to the host, and it is bound to `127.0.0.1` by default. It proxies `/api` requests to the private API network, keeping browser requests same-origin and session cookies first-party. PostgreSQL and Redis have no published ports. The database/cache network is `internal: true`; only the frontend also joins the ingress bridge.
 
-## Backend experiment
+To stop the stack, run `docker compose down`. Persistent data is held in named PostgreSQL and Redis volumes; `docker compose down -v` deletes that data.
 
-The `library-backend` service expects MySQL connection settings in a local `.env` file. Do not commit that file or put real credentials in source control. The server and API are unfinished; inspect and complete their configuration and authentication before attempting to run them. The `backend` directory's `package.json` has placeholder values and does not represent a runnable service.
+## Local development
 
-## Repository
+For `npm install` and `npm run dev`, run PostgreSQL and Redis locally, then update `DATABASE_URL` and `REDIS_URL` in `.env` for those services. Create the schema and first staff user:
 
-- **Suggested repository name:** `shelfwise-library-management`
-- **Description:** `A browser-based library desk for managing books, members, checkouts, and reports, with an experimental Node.js/MySQL backend.`
+```powershell
+npm install
+npm run db:migrate
+npm run db:create-staff
+npm run dev
+```
+
+The UI is available at <http://localhost:3000>; the API listens on port 4000. Requests from the UI use `/api` and are proxied by Next.js to the API. The API requires a `SESSION_SECRET` of at least 32 characters and an exact `WEB_ORIGINS` allowlist. The local configuration defaults to `http://localhost:3000`.
+
+## Security and operations
+
+- Staff accounts are created only through the interactive administrative CLI; there is no public registration endpoint.
+- Passwords are bcrypt-hashed. Sessions are random, server-side, eight-hour records; the browser cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, and has the `__Host-` prefix. Tokens are hashed in PostgreSQL.
+- State-changing API requests require a session-bound CSRF token and an exact allowlisted `Origin`. CORS never reflects untrusted or wildcard origins.
+- Helmet applies restrictive API headers; the frontend issues a per-request nonce CSP, anti-framing policy, HSTS, and related browser security headers.
+- Every API route is rate-limited through Redis, with a tighter login limit. The API fails closed if its rate-limit store is unavailable.
+- PostgreSQL interactions use bounded connection pooling and `$n` parameterized values. Loan issuance locks the book row in a transaction so concurrent requests cannot over-issue copies.
+- In production, PostgreSQL TLS is enabled with certificate verification. Set `NODE_ENV=production` and provide the trusted CA PEM through `DB_SSL_CA` when using a private CA; do not disable certificate validation. Production Redis connections must use `rediss://`.
+- Secrets belong in a deployment secret manager, not an image, checked-in environment file, or build argument. Terminate public TLS at a trusted ingress before exposing the frontend.
+
+## Validation
+
+```powershell
+npm run typecheck
+npm test
+npm run build
+```
+
+The Compose stack includes database, Redis, API, and frontend health checks and starts dependent services only after their readiness checks pass.

@@ -1,0 +1,27 @@
+{
+  "name": "shelfwise-library-management",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev": "npm run build --workspace=@shelfwise/contracts && concurrently -k -n api,web \"npm run dev --workspace=@shelfwise/api\" \"npm run dev --workspace=@shelfwise/web\"",
+    "build": "npm run build --workspace=@shelfwise/contracts && npm run build --workspace=@shelfwise/api && npm run build --workspace=@shelfwise/web",
+    "typecheck": "npm run build --workspace=@shelfwise/contracts && npm run typecheck --workspace=@shelfwise/contracts && npm run typecheck --workspace=@shelfwise/api && npm run typecheck --workspace=@shelfwise/web",
+    "start": "concurrently -k -n api,web \"npm run start --workspace=@shelfwise/api\" \"npm run start --workspace=@shelfwise/web\"",
+    "db:migrate": "npm run migrate --workspace=@shelfwise/api",
+    "db:create-staff": "npm run create-staff --workspace=@shelfwise/api",
+    "test": "node --import tsx --test packages/contracts/test/contracts.test.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
