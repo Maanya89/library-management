@@ -1,0 +1,12 @@
+# Node dependencies and generated files
+**/node_modules/
+npm-debug.log*
+
+# Local secrets and environment configuration
+**/.env
+**/.env.*
+!**/.env.example
+
+# Operating-system files
+.DS_Store
+Thumbs.db
