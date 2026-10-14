@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import type { StaffUser } from "@shelfwise/contracts";
+import { config } from "./config.js";
 import { csrfForSession } from "./csrf.js";
 import { pool } from "./db.js";
 import { HttpError } from "./http.js";
@@ -69,7 +70,7 @@ export async function revokeSession(token: string): Promise<void> {
 export function setSessionCookie(res: import("express").Response, token: string): void {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: true,
+    secure: config.production,
     sameSite: "strict",
     path: "/",
     maxAge: SESSION_LIFETIME_MS,
@@ -79,7 +80,7 @@ export function setSessionCookie(res: import("express").Response, token: string)
 export function clearSessionCookie(res: import("express").Response): void {
   res.clearCookie(SESSION_COOKIE, {
     httpOnly: true,
-    secure: true,
+    secure: config.production,
     sameSite: "strict",
     path: "/",
   });
